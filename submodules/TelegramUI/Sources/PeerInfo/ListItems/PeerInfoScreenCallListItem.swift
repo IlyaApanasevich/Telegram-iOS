@@ -9,17 +9,21 @@ import AccountContext
 import Postbox
 import PeerInfoUI
 import ItemListUI
+import DateDelivery
 
 final class PeerInfoScreenCallListItem: PeerInfoScreenItem {
     let id: AnyHashable
     let messages: [Message]
+    var dateItem: FetchableDateItem?
     
     init(
         id: AnyHashable,
-        messages: [Message]
+        messages: [Message],
+        dateItem: FetchableDateItem?
     ) {
         self.id = id
         self.messages = messages
+        self.dateItem = dateItem
     }
     
     func node() -> PeerInfoScreenItemNode {
@@ -65,7 +69,7 @@ private final class PeerInfoScreenCallListItemNode: PeerInfoScreenItemNode {
         
         self.bottomSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         
-        let addressItem = ItemListCallListItem(presentationData: ItemListPresentationData(presentationData), dateTimeFormat: presentationData.dateTimeFormat, messages: item.messages, sectionId: 0, style: .blocks, displayDecorations: false)
+        let addressItem = ItemListCallListItem(presentationData: ItemListPresentationData(presentationData), dateTimeFormat: presentationData.dateTimeFormat, messages: item.messages, sectionId: 0, style: .blocks, displayDecorations: false, fetchableUnixTime: item.dateItem?.unixtime)
         
         let params = ListViewItemLayoutParams(width: width, leftInset: safeInsets.left, rightInset: safeInsets.right, availableHeight: 1000.0)
         
