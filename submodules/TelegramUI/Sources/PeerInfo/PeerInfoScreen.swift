@@ -69,6 +69,7 @@ import CreateExternalMediaStreamScreen
 import PaymentMethodUI
 import PremiumUI
 import InstantPageCache
+import DateDelivery
 
 protocol PeerInfoScreenItem: AnyObject {
     var id: AnyHashable { get }
@@ -873,7 +874,7 @@ private func settingsEditingItems(data: PeerInfoScreenData?, state: PeerInfoStat
     return result
 }
 
-private func infoItems(data: PeerInfoScreenData?, context: AccountContext, presentationData: PresentationData, interaction: PeerInfoInteraction, nearbyPeerDistance: Int32?, callMessages: [Message]) -> [(AnyHashable, [PeerInfoScreenItem])] {
+private func infoItems(data: PeerInfoScreenData?, context: AccountContext, presentationData: PresentationData, interaction: PeerInfoInteraction, nearbyPeerDistance: Int32?, callMessages: [Message], dateItem: FetchableDateItem?) -> [(AnyHashable, [PeerInfoScreenItem])] {
     guard let data = data else {
         return []
     }
@@ -899,7 +900,7 @@ private func infoItems(data: PeerInfoScreenData?, context: AccountContext, prese
     
     if let user = data.peer as? TelegramUser {
         if !callMessages.isEmpty {
-            items[.calls]!.append(PeerInfoScreenCallListItem(id: 20, messages: callMessages))
+            items[.calls]!.append(PeerInfoScreenCallListItem(id: 20, messages: callMessages, dateItem: dateItem))
         }
         
         if let phone = user.phone {
@@ -1627,6 +1628,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, UIScrollViewDelegate 
     private let isMediaOnly: Bool
     
     private var presentationData: PresentationData
+    private var fetchableDateItem: FetchableDateItem?
     
     fileprivate let cachedDataPromise = Promise<CachedPeerData?>()
     
@@ -7098,6 +7100,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, UIScrollViewDelegate 
         }
     }
     
+    func updateFetchableDateItem(_ item: FetchableDateItem) {
+        self.fetchableDateItem = item
+    }
+    
     func containerLayoutUpdated(layout: ContainerViewLayout, navigationHeight: CGFloat, transition: ContainedViewLayoutTransition, additive: Bool = false) {
         self.validLayout = (layout, navigationHeight)
         
@@ -7149,7 +7155,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, UIScrollViewDelegate 
             insets.left += sectionInset
             insets.right += sectionInset
             
-            let items = self.isSettings ? settingsItems(data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, isExpanded: self.headerNode.isAvatarExpanded) : infoItems(data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, nearbyPeerDistance: self.nearbyPeerDistance, callMessages: self.callMessages)
+            let items = self.isSettings ? settingsItems(data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, isExpanded: self.headerNode.isAvatarExpanded) : infoItems(data: self.data, context: self.context, presentationData: self.presentationData, interaction: self.interaction, nearbyPeerDistance: self.nearbyPeerDistance, callMessages: self.callMessages, dateItem: self.fetchableDateItem)
             
             contentHeight += headerHeight
             if !(self.isSettings && self.state.isEditing) {
@@ -7773,6 +7779,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen {
     private var presentationDataDisposable: Disposable?
     private let cachedDataPromise = Promise<CachedPeerData?>()
     
+    private var remoteDateDisposable: Disposable?
+    
     private let accountsAndPeers = Promise<((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)])>()
     private var accountsAndPeersValue: ((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)])?
     private var accountsAndPeersDisposable: Disposable?
@@ -8082,6 +8090,17 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen {
                 }
             }
         })
+        
+        if !isSettings && !isOpenedFromChat {
+            self.remoteDateDisposable = RemoteDateFetcher().fetchDate().start(next: { [weak self] item in
+    
+                guard let strongSelf = self else {
+                    return
+                }
+                
+                strongSelf.controllerNode.updateFetchableDateItem(item)
+            })
+        }
     }
     
     required init(coder aDecoder: NSCoder) {
@@ -8092,6 +8111,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen {
         self.presentationDataDisposable?.dispose()
         self.accountsAndPeersDisposable?.dispose()
         self.tabBarItemDisposable?.dispose()
+        self.remoteDateDisposable?.dispose()
     }
     
     override public func loadDisplayNode() {
